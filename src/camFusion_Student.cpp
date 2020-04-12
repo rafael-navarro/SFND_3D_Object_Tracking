@@ -151,8 +151,51 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     // ...
 }
 
+bool getContainingBBoxInKpt(std::vector<BoundingBox> &matchBoundingBoxes, int kptIdx, int &bboxIdx)
+{
+    for(auto it = matchBoundingBoxes.begin(); it != matchBoundingBoxes.end(); ++it)
+    {
+        for(auto it2 = it->keypoints.begin(); it2 != it->keypoints.end(); ++it2)
+        {
+            if(it2->class_id == kptIdx)
+            {
+                bboxIdx = it->boxID;
+                return true;
+            }
+        }
+    }
+    return false;
+}
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
-    // ...
+    std::map<int, std::map<int, unsigned int>> bbMatches;
+
+    //Find bboxs containing points and keep count of prev and curr rois
+    for(auto it = matches.begin(); it != matches.end(); ++it)
+    {
+        int prevBBox, currBBox;
+        if(getContainingBBoxInKpt(prevFrame.boundingBoxes, it->trainIdx, prevBBox) && 
+            getContainingBBoxInKpt(currFrame.boundingBoxes, it->queryIdx, currBBox))
+        {
+            //Counters is keep in a nested map
+            ++bbMatches[prevBBox][currBBox];
+        }
+    }
+
+    //Search for the most ocurring bbox matchings.
+    for(auto it = bbMatches.begin(); it != bbMatches.end(); ++it)
+    {
+        int currMax = 0, idxMax = -1;
+        for(auto it2 = it->second.begin(); it2 != it->second.end(); ++it2)
+        {
+            if(it2->second > currMax)
+            {
+                idxMax = it2->first;
+                currMax = it2->second;
+            }
+        }
+        bbBestMatches[it->first] = idxMax;
+        cout << "BBoxs matching found " << it->first << " " << idxMax << endl;
+    }
 }
