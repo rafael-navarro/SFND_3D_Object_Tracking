@@ -131,9 +131,48 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 
 
 // associate a given bounding box with the keypoints it contains
-void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
+void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, 
+std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+    int maxShift = 200;
+    int shiftTolerance = 50;
+
+    boundingBox.keypoints.clear();
+    boundingBox.kptMatches.clear();
+
+    float avgShift = 0;
+    unsigned int counter = 0;
+
+    //Compute average shift btw matches
+    for(auto it = kptMatches.begin(); it != kptMatches.end(); ++it)
+    {
+        cv::KeyPoint kpCurr = kptsCurr.at(it->queryIdx);
+        cv::KeyPoint kpPrev = kptsPrev.at(it->trainIdx);
+
+        double shift = cv::norm(kpPrev.pt - kpCurr.pt);
+
+        if(boundingBox.roi.contains(kpCurr.pt) && shift <= maxShift)
+        {
+            avgShift += shift;
+            counter++;
+        }
+    }
+    avgShift = avgShift / counter;
+
+    for(auto it = kptMatches.begin(); it != kptMatches.end(); ++it)
+    {
+        cv::KeyPoint kpCurr = kptsCurr.at(it->queryIdx);
+        cv::KeyPoint kpPrev = kptsPrev.at(it->trainIdx);
+
+        double shift = cv::norm(kpPrev.pt - kpCurr.pt);
+
+        if(boundingBox.roi.contains(kpCurr.pt) &&
+            (shift >= avgShift - shiftTolerance) && (shift <= avgShift + shiftTolerance))
+        {
+            boundingBox.keypoints.push_back(kpCurr);
+            boundingBox.kptMatches.push_back(*it);
+        }     
+    }
 }
 
 
@@ -141,7 +180,52 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
 {
-    // ...
+    double minDist = 100.0; // min. required distance
+    vector<double> distRatios;
+
+    for (auto it1 = kptMatches.begin(); it1 != kptMatches.end() - 1; ++it1)
+    { 
+        // get current keypoint and its matched partner in the prev. frame
+        cv::KeyPoint kpOuterCurr = kptsCurr.at(it1->queryIdx);
+        cv::KeyPoint kpOuterPrev = kptsPrev.at(it1->trainIdx);
+
+        for (auto it2 = it1 + 1; it2 != kptMatches.end(); ++it2)
+        //for (auto it2 = kptMatches.begin() + 1; it2 != kptMatches.end(); ++it2)
+        { 
+            // get next keypoint and its matched partner in the prev. frame
+            cv::KeyPoint kpInnerCurr = kptsCurr.at(it2->queryIdx);
+            cv::KeyPoint kpInnerPrev = kptsPrev.at(it2->trainIdx);
+
+            // compute distances and distance ratios
+            double distCurr = cv::norm(kpOuterCurr.pt - kpInnerCurr.pt);
+            double distPrev = cv::norm(kpOuterPrev.pt - kpInnerPrev.pt);
+
+            if (distPrev > std::numeric_limits<double>::epsilon() && distCurr >= minDist)
+            { // avoid division by zero
+
+                double distRatio = distCurr / distPrev;
+                distRatios.push_back(distRatio);
+            }
+        } // eof inner loop over all matched kpts
+    } 
+
+    if (distRatios.size() == 0)
+    {
+        TTC = NAN;
+        return;
+    }
+
+    // compute camera-based TTC from distance ratios
+    double modeDistRatio;
+	std::sort(distRatios.begin(), distRatios.end());
+  	int medianIdx = int(distRatios.size() / 2);
+    if(distRatios.size() % 2 != 0)
+      modeDistRatio = distRatios[medianIdx];
+    else
+      modeDistRatio = (distRatios[medianIdx - 1] + distRatios[medianIdx]) / 2;
+    
+    double dT = 1 / frameRate;
+    TTC = -dT / (1 - modeDistRatio);
 }
 
 float findDistanceRobust(std::vector<LidarPoint> &points)
@@ -158,19 +242,24 @@ float findDistanceRobust(std::vector<LidarPoint> &points)
     if(distances.size() == 0)
     {
         cout << "Error empty points" << endl;
-        return 0;
+        return NAN;
     }
 
     std::sort(distances.begin(), distances.end(), std::greater<double>());
     
     unsigned int numElems = min(10, (int) distances.size());
-    double sum = 0;
-    for(int i = 0; i < numElems - 1; i++)
-    {
-        sum += distances[i];
-    }
 
-    return sum / numElems;
+    float avg = std::accumulate(distances.begin(), distances.begin() + numElems - 1, 0.0) / numElems;
+
+    return avg;
+
+    // double sum = 0;
+    // for(int i = 0; i < numElems - 1; i++)
+    // {
+    //     sum += distances[i];
+    // }
+
+    // return sum / numElems;
 }
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
@@ -190,9 +279,15 @@ bool getContainingBBoxInKpt(std::vector<BoundingBox> &matchBoundingBoxes, int kp
     {
         for(auto it2 = it->keypoints.begin(); it2 != it->keypoints.end(); ++it2)
         {
+            
             if(it2->class_id == kptIdx)
             {
                 bboxIdx = it->boxID;
+                
+                cv::KeyPoint kpOuterCurr = it->keypoints.at(kptIdx);
+
+                cout << "Found " <<it2->class_id << " " << kpOuterCurr.class_id << endl;
+
                 return true;
             }
         }
