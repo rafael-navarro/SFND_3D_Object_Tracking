@@ -144,11 +144,44 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
     // ...
 }
 
+float findDistanceRobust(std::vector<LidarPoint> &points)
+{
+    std::vector<double> distances;
+
+    for(LidarPoint point : points)
+    {
+        //double distance = sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
+        //if(point.r > 0.0)
+        distances.push_back(point.x);
+    }
+
+    if(distances.size() == 0)
+    {
+        cout << "Error empty points" << endl;
+        return 0;
+    }
+
+    std::sort(distances.begin(), distances.end(), std::greater<double>());
+    
+    unsigned int numElems = min(10, (int) distances.size());
+    double sum = 0;
+    for(int i = 0; i < numElems - 1; i++)
+    {
+        sum += distances[i];
+    }
+
+    return sum / numElems;
+}
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    // ...
+    double dT = 1 / frameRate; // time between two measurements in seconds
+    
+    double distPrev = findDistanceRobust(lidarPointsPrev);
+    double distCurr = findDistanceRobust(lidarPointsCurr);
+
+    TTC = distCurr * dT / (distPrev - distCurr);
 }
 
 bool getContainingBBoxInKpt(std::vector<BoundingBox> &matchBoundingBoxes, int kptIdx, int &bboxIdx)
