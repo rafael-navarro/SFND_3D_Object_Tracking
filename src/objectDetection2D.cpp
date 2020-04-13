@@ -86,8 +86,6 @@ void detectObjects(cv::Mat& img, std::vector<BoundingBox>& bBoxes, float confThr
     cv::dnn::NMSBoxes(boxes, confidences, confThreshold, nmsThreshold, indices);
     for(auto it=indices.begin(); it!=indices.end(); ++it) {
         
-        if(classes[classIds[*it]].compare("car") != 0 ) continue;
-
         BoundingBox bBox;
         bBox.roi = boxes[*it];
         bBox.classID = classIds[*it];
