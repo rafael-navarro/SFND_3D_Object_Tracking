@@ -61,7 +61,7 @@ void clusterLidarWithROI(std::vector<BoundingBox> &boundingBoxes, std::vector<Li
 }
 
 
-void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, bool bWait)
+void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, cv::Size imageSize, float distance, string label, bool bWait)
 {
     // create topview image
     cv::Mat topviewImg(imageSize, CV_8UC3, cv::Scalar(255, 255, 255));
@@ -107,6 +107,7 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
         putText(topviewImg, str1, cv::Point2f(left-250, bottom+50), cv::FONT_ITALIC, 2, currColor);
         sprintf(str2, "xmin=%2.2f m, yw=%2.2f m", xwmin, ywmax-ywmin);
         putText(topviewImg, str2, cv::Point2f(left-250, bottom+125), cv::FONT_ITALIC, 2, currColor);  
+        putText(topviewImg, label, cv::Point2f(250,50), cv::FONT_ITALIC, 2, currColor);  
     }
 
     // plot distance markers
@@ -117,6 +118,8 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
         int y = (-(i * lineSpacing) * imageSize.height / worldSize.height) + imageSize.height;
         cv::line(topviewImg, cv::Point(0, y), cv::Point(imageSize.width, y), cv::Scalar(255, 0, 0));
     }
+    int y = (-distance * imageSize.height / worldSize.height) + imageSize.height;
+    cv::line(topviewImg, cv::Point(0, y), cv::Point(imageSize.width, y), cv::Scalar(0, 0, 255));
 
     // display image
     string windowName = "3D Objects";
@@ -240,47 +243,50 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
 float findDistanceRobust(std::vector<LidarPoint> &points)
 {
     //cout << "findDistanceRobust " << points.size() << endl;
-    int MaxNumElements = 100;
+    int MaxNumElements = 50;
     std::vector<double> distances;
 
+    cerr << "Lidar Points: "; 
     for(LidarPoint point : points)
     {
         //double distance = sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
         //if(point.r > 0.0)
         distances.push_back(point.x);
+        cerr << point.x << " ";
     }
+    cerr << endl;
 
     if(distances.size() == 0)
     {
         cout << "Error empty points" << endl;
         return NAN;
     }
-
     
-    std::sort(distances.begin(), distances.end(), std::greater<double>());
-    unsigned int numElems = min(MaxNumElements, (int) distances.size());
-    
-    float avg = std::accumulate(distances.begin(), distances.begin() + numElems - 1, 0.0) / numElems;
+    //std::sort(distances.begin(), distances.end());
+    //unsigned int numElems = min(MaxNumElements, (int) distances.size());
+    //float avg = std::accumulate(distances.begin(), distances.begin() + numElems - 1, 0.0) / numElems;
+    //return avg;
 
-    return avg;
+    double median;
+	std::sort(distances.begin(), distances.end());
+  	int medianIdx = int(distances.size() / 2);
+    if(distances.size() % 2 != 0)
+      median = distances[medianIdx];
+    else
+      median = (distances[medianIdx - 1] + distances[medianIdx]) / 2;
 
-    // double sum = 0;
-    // for(int i = 0; i < numElems - 1; i++)
-    // {
-    //     sum += distances[i];
-    // }
+    return median;
 
-    // return sum / numElems;
 }
 
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
-                     std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
+                     std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC, double &distPrev, double &distCurr)
 {
     //cout << "computeTTCLidar" << endl;
     double dT = 1 / frameRate; // time between two measurements in seconds
     
-    double distPrev = findDistanceRobust(lidarPointsPrev);
-    double distCurr = findDistanceRobust(lidarPointsCurr);
+    distPrev = findDistanceRobust(lidarPointsPrev);
+    distCurr = findDistanceRobust(lidarPointsCurr);
 
     TTC = distCurr * dT / (distPrev - distCurr);
     cout << "computeTTCLidar.TTC:" << TTC << endl;
@@ -298,21 +304,6 @@ bool getContainingBBoxInKpt(std::vector<BoundingBox> &matchBoundingBoxes, std::v
             //cout << "Found " << bboxIdx << endl;
             return true;
         }
-
-        // for(auto it2 = it->keypoints.begin(); it2 != it->keypoints.end(); ++it2)
-        // {
-        //     cout << "getContainingBBoxInKpt:" << it2->class_id << " " << kptIdx << endl; 
-        //     if(it2->class_id == kptIdx)
-        //     {
-        //         bboxIdx = it->boxID;
-                
-        //         cv::KeyPoint kpOuterCurr = it->keypoints.at(kptIdx);
-
-        //         cout << "Found " <<it2->class_id << " " << kpOuterCurr.class_id << endl;
-
-        //         return true;
-        //     }
-        // }
     }
 
     //cout << "Not Found " << endl;
