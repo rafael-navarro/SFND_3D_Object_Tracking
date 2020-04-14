@@ -30,7 +30,7 @@ Probably this is because of noisy data, so more robust measurement should be pro
 
 All detector/descriptor combinations have been executed over the 20 first images. The parameters of the algorithms are left as default values. The results can be seen in following graph:
 
-<img src="images/Lidar02.png" height="500"/>
+<img src="images/Graph_TTCCam.png" height="500"/>
 
 Lidar based computation is shown for comparison, since it should be the most stable method. In general, the graph shows the results are not very stable (some outliers have been removed for clarity). For instance, HARRIS detector is very noisy, since not enough keypoints/matches are found,  which leads to errors in the calculation.
 
