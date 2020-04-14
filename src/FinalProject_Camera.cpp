@@ -29,6 +29,7 @@ int main(int argc, const char *argv[])
     vector<float> TtcValues;
     string detectorType;
     string descriptorType;
+    bool saveImg = true;
 
 
     // data location
@@ -38,8 +39,8 @@ int main(int argc, const char *argv[])
     string imgBasePath = dataPath + "images/";
     string imgPrefix = "KITTI/2011_09_26/image_02/data/000000"; // left camera, color
     string imgFileType = ".png";
-    int imgStartIndex = 20; // first file index to load (assumes Lidar and camera names have identical naming convention)
-    int imgEndIndex = 77; //18;   // last file index to load
+    int imgStartIndex = 0; // first file index to load (assumes Lidar and camera names have identical naming convention)
+    int imgEndIndex = 20; //18;   // last file index to load
     int imgStepWidth = 1; 
     int imgFillWidth = 4;  // no. of digits which make up the file index (e.g. img-0001.png)
 
@@ -105,7 +106,7 @@ int main(int argc, const char *argv[])
         float confThreshold = 0.2;
         float nmsThreshold = 0.4;        
         detectObjects((dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->boundingBoxes, confThreshold, nmsThreshold,
-                      yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, true); //bVis);
+                      yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, false); //bVis);
 
         cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
 
@@ -154,7 +155,7 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
+        detectorType = "SHITOMASI";
         if(argc >= 2)
             detectorType = argv[1];
 
@@ -195,7 +196,7 @@ int main(int argc, const char *argv[])
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         cv::Mat descriptors;
-        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
         if(argc >= 3)
             descriptorType = argv[2];
 
@@ -214,20 +215,20 @@ int main(int argc, const char *argv[])
 
             vector<cv::DMatch> matches;
             string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
+            string descriptorType2 = "DES_BINARY"; // DES_BINARY, DES_HOG
             string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
 
             if(argc >= 4)
                 matcherType = argv[3];
             if(argc >= 5)
-                descriptorType = argv[4];
+                descriptorType2 = argv[4];
             if(argc >= 6)
                 selectorType = argv[5];
 
 
             matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
                              (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
-                             matches, descriptorType, matcherType, selectorType);
+                             matches, descriptorType2, matcherType, selectorType);
 
             // store matches in current data frame 
             (dataBuffer.end() - 1)->kptMatches = matches;
@@ -280,7 +281,7 @@ int main(int argc, const char *argv[])
                     double ttcLidar, distPrev, distCurr; 
                     computeTTCLidar(prevBB->lidarPoints, currBB->lidarPoints, sensorFrameRate, ttcLidar, distPrev, distCurr);
                     //// EOF STUDENT ASSIGNMENT
-                    bVis = true;
+                    bVis = false;
                     if(bVis)
                     {
                         vector<BoundingBox> aux;
@@ -301,11 +302,19 @@ int main(int argc, const char *argv[])
                     
                     TtcValues.push_back(ttcCamera);
 
-                    bVis = false;
+                    bVis = true;
                     if (bVis)
                     {
                         cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();
-                        showLidarImgOverlay(visImg, currBB->lidarPoints, P_rect_00, R_rect_00, RT, &visImg);
+                        cv::Mat matchImg = ((dataBuffer.end() - 1)->cameraImg).clone();
+                        cv::drawMatches((dataBuffer.end() - 2)->cameraImg, (dataBuffer.end() - 2)->keypoints,
+                                    (dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->keypoints,
+                                    currBB->kptMatches, matchImg,
+                                    cv::Scalar::all(-1), cv::Scalar::all(-1),
+                                    vector<char>(), cv::DrawMatchesFlags::DRAW_RICH_KEYPOINTS);
+
+                        visImg = matchImg;
+                        //showLidarImgOverlay(visImg, currBB->lidarPoints, P_rect_00, R_rect_00, RT, &visImg);
                         cv::rectangle(visImg, cv::Point(currBB->roi.x, currBB->roi.y), cv::Point(currBB->roi.x + currBB->roi.width, currBB->roi.y + currBB->roi.height), cv::Scalar(0, 255, 0), 2);
                         
                         char str[200];
@@ -317,6 +326,15 @@ int main(int argc, const char *argv[])
                         cv::imshow(windowName, visImg);
                         cout << "Press key to continue to next frame" << endl;
                         cv::waitKey(0);
+
+                        if(saveImg)
+                        {
+                            //cv::waitKey(0);
+                            saveImg = false;
+                            char str[200];
+                            sprintf(str, "./%s_%s.png", detectorType.c_str(), descriptorType.c_str());
+                            //cv::imwrite(str, visImg);
+                        }
                     }
                     bVis = false;
 

@@ -246,15 +246,15 @@ float findDistanceRobust(std::vector<LidarPoint> &points)
     int MaxNumElements = 50;
     std::vector<double> distances;
 
-    cerr << "Lidar Points: "; 
+    //cerr << "Lidar Points: "; 
     for(LidarPoint point : points)
     {
         //double distance = sqrt(point.x * point.x + point.y * point.y + point.z * point.z);
         //if(point.r > 0.0)
         distances.push_back(point.x);
-        cerr << point.x << " ";
+      //  cerr << point.x << " ";
     }
-    cerr << endl;
+    //cerr << endl;
 
     if(distances.size() == 0)
     {
