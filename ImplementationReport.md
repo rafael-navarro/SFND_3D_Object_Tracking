@@ -34,11 +34,11 @@ All detector/descriptor combinations have been executed over the 20 first images
 
 Lidar based computation is shown for comparison, since it should be the most stable method. In general, the graph shows the results are not very stable (some outliers have been removed for clarity). For instance, HARRIS detector is very noisy, since not enough keypoints/matches are found,  which leads to errors in the calculation.
 
-<img src="images/HARRIS_FREAK.png" height="500"/>
+<img src="images/HARRIS_FREAK.png" />
 
 In some cases the matches are found outside de car, even though the area has been found correctly. This situation could lead to errors in the computation. In order to mitigate, object detection algorithm could be changed for a segmentation algorithm, but it should be analyzed if it is fast enough for real time. 
 
-<img src="images/FAST_ORB.png" height="500"/>
+<img src="images/FAST_ORB.png" />
 
 In general, it seems that there is not enough resolution to perform the calculation. In many cases the difference between one segment of a frame and the next varies by a few pixels. Therefore, it could be convenient to increase the frame rate to obtain more accurate measurements.
 
